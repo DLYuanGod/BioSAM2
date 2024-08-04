@@ -19,9 +19,9 @@ img_name_suffix = "_0000.nii.gz"
 gt_name_suffix = ".nii.gz"
 prefix = modality + "_" + anatomy + "_"
 
-nii_path = "data/FLARE22Train/images"  # path to the nii images
-gt_path = "data/FLARE22Train/labels"  # path to the ground truth
-npy_path = "data/npy/" + prefix[:-1]
+nii_path = "/root/autodl-tmp/nnUNet_raw/Dataset701_AbdomenCT/imagesTr"  # path to the nii images
+gt_path = "/root/autodl-tmp/nnUNet_raw/Dataset701_AbdomenCT/labelsTr"  # path to the ground truth
+npy_path = "/root/autodl-tmp/nnUNet_raw/Dataset701_AbdomenCT/npy/" + prefix[:-1]
 os.makedirs(join(npy_path, "gts"), exist_ok=True)
 os.makedirs(join(npy_path, "imgs"), exist_ok=True)
 

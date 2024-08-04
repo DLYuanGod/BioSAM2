@@ -119,7 +119,7 @@ class NpyDataset(Dataset):
 
 
 # %% sanity test of dataset class
-tr_dataset = NpyDataset("data/npy/CT_Abd")
+tr_dataset = NpyDataset("/root/autodl-tmp/nnUNet_raw/Dataset703_NeurIPSCell/npy/CT_Cell")
 tr_dataloader = DataLoader(tr_dataset, batch_size=2, shuffle=True)
 for step, (image, gt, bboxes, names_temp) in enumerate(tr_dataloader):
     print(image.shape, gt.shape, bboxes.shape)
@@ -151,7 +151,7 @@ parser.add_argument(
     "-i",
     "--tr_npy_path",
     type=str,
-    default="data/npy/CT_Abd",
+    default="/root/autodl-tmp/nnUNet_raw/Dataset703_NeurIPSCell/npy/CT_Cell",
     help="path to training npy files; two subfolders: gts and imgs",
 )
 parser.add_argument("-task_name", type=str, default="MedSAM-ViT-B")
