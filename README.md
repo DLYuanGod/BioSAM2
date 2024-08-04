@@ -9,9 +9,10 @@ This is the official repository for MedSAM: Segment Anything in Medical Images.
 
 ## Installation
 1. Create a virtual environment `conda create -n medsam python=3.10 -y` and activate it `conda activate medsam`
-2. Install [Pytorch 2.0](https://pytorch.org/get-started/locally/)
-3. `git clone https://github.com/bowang-lab/MedSAM`
-4. Enter the MedSAM folder `cd MedSAM` and run `pip install -e .`
+2. Install `pip3 install torch torchvision torchaudio`
+3. `git clone https://github.com/DLYuanGod/BioSAM2`
+4. Enter the BioSAM2 folder `cd BioSAM2` and run `pip install -e .`
+5. Enter `cd segment-anything-2` and `pip install -e .`
 
 
 ## Get Started
