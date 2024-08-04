@@ -46,17 +46,19 @@ def medsam_inference(medsam_model, img_embed, box_1024, H, W):
     if len(box_torch.shape) == 2:
         box_torch = box_torch[:, None, :]  # (B, 1, 4)
 
-    sparse_embeddings, dense_embeddings = medsam_model.prompt_encoder(
+    sparse_embeddings, dense_embeddings = medsam_model.sam_prompt_encoder(
         points=None,
         boxes=box_torch,
         masks=None,
     )
-    low_res_logits, _ = medsam_model.mask_decoder(
-        image_embeddings=img_embed,  # (B, 256, 64, 64)
-        image_pe=medsam_model.prompt_encoder.get_dense_pe(),  # (1, 256, 64, 64)
-        sparse_prompt_embeddings=sparse_embeddings,  # (B, 2, 256)
-        dense_prompt_embeddings=dense_embeddings,  # (B, 256, 64, 64)
-        multimask_output=False,
+    low_res_masks, _, _, _ = medsam_model.sam_mask_decoder(
+            image_embeddings=image_embedding,  # (B, 256, 64, 64)
+            image_pe=self.prompt_encoder.get_dense_pe(),  # (1, 256, 64, 64)
+            sparse_prompt_embeddings=sparse_embeddings,  # (B, 2, 256)
+            dense_prompt_embeddings=dense_embeddings,  # (B, 256, 64, 64)
+            multimask_output=False,
+            repeat_image=False,
+            high_res_features=None,
     )
 
     low_res_pred = torch.sigmoid(low_res_logits)  # (1, 1, 256, 256)
@@ -107,8 +109,9 @@ parser.add_argument(
 args = parser.parse_args()
 
 device = args.device
-medsam_model = sam_model_registry["vit_b"](checkpoint=args.checkpoint)
-medsam_model = medsam_model.to(device)
+checkpoint = arg.checkpoint
+model_cfg = "sam2_hiera_t.yaml"
+sam_model = SAM2ImagePredictor(build_sam2(model_cfg, checkpoint))
 medsam_model.eval()
 
 img_np = io.imread(args.data_path)
@@ -133,9 +136,23 @@ box_np = np.array([[int(x) for x in args.box[1:-1].split(',')]])
 # transfer box_np t0 1024x1024 scale
 box_1024 = box_np / np.array([W, H, W, H]) * 1024
 with torch.no_grad():
-    image_embedding = medsam_model.image_encoder(img_1024_tensor)  # (1, 256, 64, 64)
+    # image_embedding = medsam_model.image_encoder(img_1024_tensor)  # (1, 256, 64, 64)
+    image = img_1024_tensor
+    batch_size = image.shape[0]
+    backbone_out = medsam_model.model.forward_image(image)
+    _, vision_feats, _, _ = medsam_model.model._prepare_backbone_features(backbone_out)
+    if medsam_model.model.directly_add_no_mem_embed:
+            vision_feats[-1] = vision_feats[-1] + medsam_model.model.no_mem_embed
 
-medsam_seg = medsam_inference(medsam_model, image_embedding, box_1024, H, W)
+    feats = [
+            feat.permute(1, 2, 0).view(batch_size, -1, *feat_size)
+            for feat, feat_size in zip(vision_feats[::-1], medsam_model._bb_feat_sizes[::-1])
+    ][::-1]
+
+        # self.predictor.set_image(image)
+    image_embedding = feats[-1]
+
+medsam_seg = medsam_inference(medsam_model.model, image_embedding, box_1024, H, W)
 io.imsave(
     join(args.seg_path, "seg_" + os.path.basename(args.data_path)),
     medsam_seg,
