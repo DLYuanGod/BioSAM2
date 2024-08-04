@@ -1,12 +1,3 @@
-# MedSAM
-This is the official repository for MedSAM: Segment Anything in Medical Images.
-
-## News
-
-- 2024.01.15: Welcome to join [CVPR 2024 Challenge: MedSAM on Laptop](https://www.codabench.org/competitions/1847/)
-- 2024.01.15: Release [LiteMedSAM](https://github.com/bowang-lab/MedSAM/blob/LiteMedSAM/README.md) and [3D Slicer Plugin](https://github.com/bowang-lab/MedSAMSlicer), 10x faster than MedSAM! 
-
-
 ## Installation
 1. Create a virtual environment `conda create -n medsam python=3.10 -y` and activate it `conda activate medsam`
 2. Install `pip3 install torch torchvision torchaudio`
@@ -54,5 +45,10 @@ Change the data npy path [here](https://github.com/DLYuanGod/BioSAM2/blob/main/t
 python train_one_gpu.py
 ```
 
+# Testing
+
+Change the ckpt [here](https://github.com/DLYuanGod/BioSAM2/blob/main/MedSAM_Inference.py#106) and arg [here](https://github.com/DLYuanGod/BioSAM2/blob/main/MedSAM_Inference.py#85). 
+
+And eval [using](https://github.com/bowang-lab/U-Mamba/tree/main/evaluation)
 
 
