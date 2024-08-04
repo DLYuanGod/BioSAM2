@@ -24,6 +24,10 @@ from datetime import datetime
 import shutil
 import glob
 
+import torch
+from sam2.build_sam import build_sam2
+from sam2.sam2_image_predictor import SAM2ImagePredictor
+
 # set seeds
 torch.manual_seed(2023)
 torch.cuda.empty_cache()
@@ -116,19 +120,19 @@ class NpyDataset(Dataset):
 
 # %% sanity test of dataset class
 tr_dataset = NpyDataset("data/npy/CT_Abd")
-tr_dataloader = DataLoader(tr_dataset, batch_size=8, shuffle=True)
+tr_dataloader = DataLoader(tr_dataset, batch_size=2, shuffle=True)
 for step, (image, gt, bboxes, names_temp) in enumerate(tr_dataloader):
     print(image.shape, gt.shape, bboxes.shape)
     # show the example
     _, axs = plt.subplots(1, 2, figsize=(25, 25))
-    idx = random.randint(0, 7)
+    idx = random.randint(0, 1)
     axs[0].imshow(image[idx].cpu().permute(1, 2, 0).numpy())
     show_mask(gt[idx].cpu().numpy(), axs[0])
     show_box(bboxes[idx].numpy(), axs[0])
     axs[0].axis("off")
     # set title
     axs[0].set_title(names_temp[idx])
-    idx = random.randint(0, 7)
+    idx = random.randint(0, 1)
     axs[1].imshow(image[idx].cpu().permute(1, 2, 0).numpy())
     show_mask(gt[idx].cpu().numpy(), axs[1])
     show_box(bboxes[idx].numpy(), axs[1])
@@ -210,17 +214,33 @@ class MedSAM(nn.Module):
         image_encoder,
         mask_decoder,
         prompt_encoder,
+        predictor,
     ):
         super().__init__()
         self.image_encoder = image_encoder
         self.mask_decoder = mask_decoder
         self.prompt_encoder = prompt_encoder
+        self.predictor = predictor
         # freeze prompt encoder
         for param in self.prompt_encoder.parameters():
             param.requires_grad = False
 
     def forward(self, image, box):
-        image_embedding = self.image_encoder(image)  # (B, 256, 64, 64)
+        batch_size = image.shape[0]
+        backbone_out = self.predictor.model.forward_image(image)
+        _, vision_feats, _, _ = self.predictor.model._prepare_backbone_features(backbone_out)
+        if self.predictor.model.directly_add_no_mem_embed:
+            vision_feats[-1] = vision_feats[-1] + self.predictor.model.no_mem_embed
+
+        feats = [
+            feat.permute(1, 2, 0).view(batch_size, -1, *feat_size)
+            for feat, feat_size in zip(vision_feats[::-1], self.predictor._bb_feat_sizes[::-1])
+        ][::-1]
+
+        # self.predictor.set_image(image)
+        image_embedding = feats[-1]
+        # image_embedding = self.image_encoder(image)  # (B, 256, 64, 64)
+        # print(image_embedding)
         # do not compute gradients for prompt encoder
         with torch.no_grad():
             box_torch = torch.as_tensor(box, dtype=torch.float32, device=image.device)
@@ -232,12 +252,14 @@ class MedSAM(nn.Module):
                 boxes=box_torch,
                 masks=None,
             )
-        low_res_masks, _ = self.mask_decoder(
+        low_res_masks, _, _, _ = self.mask_decoder(
             image_embeddings=image_embedding,  # (B, 256, 64, 64)
             image_pe=self.prompt_encoder.get_dense_pe(),  # (1, 256, 64, 64)
             sparse_prompt_embeddings=sparse_embeddings,  # (B, 2, 256)
             dense_prompt_embeddings=dense_embeddings,  # (B, 256, 64, 64)
             multimask_output=False,
+            repeat_image=False,
+            high_res_features=None,
         )
         ori_res_masks = F.interpolate(
             low_res_masks,
@@ -254,11 +276,16 @@ def main():
         __file__, join(model_save_path, run_id + "_" + os.path.basename(__file__))
     )
 
-    sam_model = sam_model_registry[args.model_type](checkpoint=args.checkpoint)
+    checkpoint = "/root/segment-anything-2/checkpoints/sam2_hiera_tiny.pt"
+    model_cfg = "sam2_hiera_t.yaml"
+    sam_model = SAM2ImagePredictor(build_sam2(model_cfg, checkpoint))
+
+    # sam_model = sam_model_registry[args.model_type](checkpoint=args.checkpoint)
     medsam_model = MedSAM(
-        image_encoder=sam_model.image_encoder,
-        mask_decoder=sam_model.mask_decoder,
-        prompt_encoder=sam_model.prompt_encoder,
+        image_encoder=sam_model.model.image_encoder,
+        mask_decoder=sam_model.model.sam_mask_decoder,
+        prompt_encoder=sam_model.model.sam_prompt_encoder,
+        predictor = sam_model
     ).to(device)
     medsam_model.train()
 
